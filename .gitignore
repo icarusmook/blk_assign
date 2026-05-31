@@ -1,0 +1,32 @@
+# 배정 결과 출력 파일 (대용량 / 실행 시 재생성)
+blk_assign_result.xlsx
+blk_assign_stats.json
+blk_assign_report.html
+
+# 테스트 데이터 (재생성 가능)
+blk_master.xlsx
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 가상환경
+venv/
+env/
+.env/
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+~$*.xlsx
