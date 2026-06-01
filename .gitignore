@@ -1,5 +1,4 @@
 # 배정 결과 출력 파일 (대용량 / 실행 시 재생성)
-blk_assign_stats.json
 blk_assign_report.html
 
 # Python 캐시
