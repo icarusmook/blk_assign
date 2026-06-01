@@ -869,7 +869,9 @@ flowchart TD
     R10 --> R11[R11 H행 + stg=대·중 잔여물량<br/>PS페어 그룹: AREA7+8 · AREA9+10 · AREA13+14<br/>단독 그룹: AREA7→14 순차 first-fit<br/>그룹 초과 시 해제 후 개별 배정]
 
     R11 --> R12[R12 H행 + blk 4번째 자리 9 또는 H<br/>→ prt_area로 override 배정]
-    R12 --> SAVE[💾 blk_assign_result.xlsx 저장]
+
+    R12 --> R13[R13 T행 + stg=소 미배정 잔여<br/>area_seq 순으로 분산 배정<br/>그룹: pjt+blk+type / 정렬: assign_prior→m_stdt<br/>area_prior_1→5 단계적 확장 / 목표 도달 시 다음 area]
+    R13 --> SAVE[💾 blk_assign_result.xlsx 저장]
 
     style R0 fill:#fff3cd,stroke:#ffc107
     style R5 fill:#fff3cd,stroke:#ffc107
@@ -1054,6 +1056,7 @@ body{{ font-family:'Segoe UI',sans-serif; background:#f5f7fa; }}
           <div class="col-md-6"><div class="p-2 border rounded small"><b>R10</b> H-대-jig_D/L: 씨드블록과 동일 (pjt+blk앞3자리+말미) 그룹 → AREA12</div></div>
           <div class="col-md-6"><div class="p-2 border rounded small"><b>R11</b> 잔여: PS페어→(7+8)(9+10)(13+14) / 단독→AREA7~14 first-fit / 초과시 개별</div></div>
           <div class="col-md-6"><div class="p-2 border rounded small"><b>R12</b> H-dir: blk 4번째 자리가 9 또는 H → prt_area로 강제 override 배정</div></div>
+          <div class="col-md-6"><div class="p-2 border rounded small"><b>R13</b> T-소 분산배정: area_seq 순, (pjt+blk+type) 그룹, assign_prior→m_stdt 정렬. area_prior_1~5 단계적 확장, 목표 도달 시 다음 area</div></div>
         </div>
       </div>
     </div>
