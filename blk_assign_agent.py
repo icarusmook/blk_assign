@@ -788,7 +788,7 @@ def save_stats(df: pd.DataFrame, cl: dict, capa: dict, tgt: dict):
     year = 2026
     # 단계별 배정 건수 & 작업장 분포
     steps = []
-    for rule in ['R2','R3','R4','R6','R7','R8','R9','R10','R11','R12']:
+    for rule in ['R2','R3','R4','R6','R7','R8','R9','R10','R11','R12','R13']:
         sub = df[df['rule_assigned'] == rule]
         area_dist = sub['assigned_area'].value_counts().to_dict()
         steps.append({
@@ -1013,7 +1013,7 @@ body{{ font-family:'Segoe UI',sans-serif; background:#f5f7fa; }}
       <div class="card stat-box h-100">
         <div class="text-muted small">배정 규칙 수</div>
         <div class="fs-2 fw-bold text-primary">{len(stats['steps'])}</div>
-        <div class="text-muted small">R2 ~ R12</div>
+        <div class="text-muted small">R2 ~ R13</div>
       </div>
     </div>
   </div>
@@ -1143,6 +1143,7 @@ body{{ font-family:'Segoe UI',sans-serif; background:#f5f7fa; }}
             <option>R2</option><option>R3</option><option>R4</option>
             <option>R6</option><option>R7</option><option>R8</option>
             <option>R9</option><option>R10</option><option>R11</option><option>R12</option>
+            <option>R13</option>
             <option value="NONE">미배정</option>
           </select>
         </div>
