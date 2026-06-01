@@ -1,7 +1,8 @@
 # blk_assign_agent
 
 > 제품과 작업장을 규칙 기반으로 자동 배정하고,  
-> 월별·주별 조업도를 균등화하는 Python 기반 배정 엔진 + 웹 대시보드
+> 월별·주별 조업도를 균등화하는 Python 기반 배정 엔진.  
+> 실행 한 번으로 배정 결과(xlsx)와 웹 대시보드(html)를 동시에 생성한다.
 
 ---
 
@@ -29,7 +30,7 @@
 | 핵심 개념 | 목표조업도 = 전체부하 ÷ 전체능력, 작업장별 목표물량 = 목표조업도 × 작업장능력 |
 | 부하 산출 | m_stdt ~ m_fndt 기간의 영업일에 load_mh를 일할 분배 → 월별·주별 부하 집계 |
 | 배정 방식 | R0~R13 규칙을 순차 실행, 각 규칙은 독립적으로 수정 가능 |
-| 출력 | blk_assign_result.xlsx (assigned_area 컬럼 추가), 웹 대시보드 HTML |
+| 출력 | blk_assign_result.xlsx + blk_assign_stats.json + blk_assign_report.html (실행 시 자동 생성) |
 
 ---
 
@@ -40,12 +41,9 @@ blk_assign/
 │
 ├── 📄 README.md                  # 이 파일
 │
-├── 🔧 [배정 엔진]
-│   ├── blk_assign_agent.py       # 핵심: 배정 로직 (R0~R13)
+├── 🔧 [배정 엔진 + 리포트]
+│   ├── blk_assign_agent.py       # 핵심: 배정 로직 (R0~R13) + HTML 리포트 자동 생성
 │   └── blk_assign.py             # 구버전 배정 스크립트 (참고용)
-│
-├── 🌐 [웹 대시보드]
-│   └── blk_assign_web.py         # HTML 리포트 생성기
 │
 ├── 🗄️ [데이터 생성]
 │   └── blk_master_gen.py         # 테스트용 blk_master 데이터 생성기
@@ -54,10 +52,10 @@ blk_assign/
 │   ├── blk_master.xlsx           # 블록 마스터 (배정 대상)
 │   └── area_capa.xlsx            # 작업장별 월별 능력(MH)
 │
-├── 📁 [출력 파일]  ─── .gitignore에서 제외
+├── 📁 [출력 파일]  ─── blk_assign_agent.py 실행 시 자동 생성
 │   ├── blk_assign_result.xlsx    # 배정 결과 (assigned_area 포함)
-│   ├── blk_assign_stats.json     # 배정 통계 (웹 대시보드용)
-│   └── blk_assign_report.html   # 웹 대시보드
+│   ├── blk_assign_stats.json     # 배정 통계
+│   └── blk_assign_report.html    # 웹 대시보드 (브라우저에서 직접 열기)
 │
 └── 📋 [명세 문서]
     ├── blk_assign_spec_v1.0.md   # 배정 규칙 상세 명세 (Markdown)
@@ -77,36 +75,26 @@ blk_assign/
                  │                     │
                  ▼                     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   배정 엔진 (Backend)                        │
-│                  blk_assign_agent.py                        │
+│                   blk_assign_agent.py                       │
 │                                                             │
 │  [글로벌] load_mh 일할 분배 → 월별/주별 부하 산출            │
 │  [R1]  목표조업도 및 작업장별 목표물량 산출                   │
 │  [R2~R13] 규칙 기반 순차 배정                                │
-└────────────────┬─────────────────────────────────────────── ┘
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
-┌──────────────┐  ┌───────────────────┐
-│ 배정 결과    │  │  통계 데이터       │
-│ result.xlsx  │  │  stats.json        │
-└──────────────┘  └────────┬──────────┘
-                           │
-                           ▼
-          ┌─────────────────────────────────┐
-          │    리포트 생성기 (Frontend)      │
-          │      blk_assign_web.py          │
-          │  - Mermaid 플로우차트           │
-          │  - 단계별 배정 결과 차트         │
-          │  - 작업장별 조업도 히트맵        │
-          │  - 블록 목록 검색/필터           │
-          └────────────────┬────────────────┘
-                           │
-                           ▼
-              ┌────────────────────────┐
-              │  blk_assign_report.html │
-              │  (브라우저에서 직접 열기)│
-              └────────────────────────┘
+│                                                             │
+│  ── 배정 완료 후 자동 실행 ──────────────────────────────    │
+│  generate_html_report()                                     │
+│  - Mermaid 플로우차트                                        │
+│  - 단계별 배정 결과 차트                                     │
+│  - 작업장별 조업도 히트맵                                    │
+│  - 블록 목록 검색/필터                                       │
+│  - Agent 실행 시점 + 페이지 로드 시점 타임스탬프             │
+└──────┬──────────────┬──────────────────┬───────────────────┘
+       │              │                  │
+       ▼              ▼                  ▼
+┌────────────┐ ┌─────────────┐ ┌──────────────────────┐
+│result.xlsx │ │stats.json   │ │blk_assign_report.html │
+│(배정 결과) │ │(배정 통계)  │ │(브라우저에서 직접 열기)│
+└────────────┘ └─────────────┘ └──────────────────────┘
 ```
 
 ### 모듈 역할
@@ -114,8 +102,7 @@ blk_assign/
 | 파일 | 역할 | 실행 순서 |
 |------|------|-----------|
 | `blk_master_gen.py` | 테스트용 blk_master 데이터 생성 | ① (최초 1회) |
-| `blk_assign_agent.py` | 배정 엔진 — R0~R13 규칙 실행, 결과 저장 | ② |
-| `blk_assign_web.py` | 배정 결과를 HTML 대시보드로 변환 | ③ |
+| `blk_assign_agent.py` | 배정 엔진 (R0~R13) + HTML 리포트 자동 생성 | ② |
 
 ---
 
@@ -194,6 +181,7 @@ BLK_MASTER_PATH = f'{BASE_DIR}/blk_master.xlsx'
 AREA_CAPA_PATH  = f'{BASE_DIR}/area_capa.xlsx'
 RESULT_PATH     = f'{BASE_DIR}/blk_assign_result.xlsx'
 STATS_PATH      = f'{BASE_DIR}/blk_assign_stats.json'
+REPORT_PATH     = f'{BASE_DIR}/blk_assign_report.html'
 ```
 
 > WSL2 환경에서 Windows 경로 접근 시: `BASE_DIR = '/mnt/d/mook/AI/pjt/company/blk_assign'`
@@ -219,8 +207,8 @@ python blk_assign_agent.py
 ```
 
 - 실행 시간: 약 10~30초 (데이터 규모에 따라 상이)
-- 출력 파일: `blk_assign_result.xlsx`, `blk_assign_stats.json`
-- 콘솔 출력: R0~R13 단계별 배정 결과 및 조업도 요약
+- 출력 파일: `blk_assign_result.xlsx`, `blk_assign_stats.json`, `blk_assign_report.html`
+- 콘솔 출력: R0~R13 단계별 배정 결과, 조업도 요약, HTML 생성 완료 메시지
 
 **콘솔 출력 예시:**
 ```
@@ -229,19 +217,24 @@ python blk_assign_agent.py
 ...
 [R13] T-소 분산배정 합계: 462건
 전체: 3,200건 | 배정완료: 2,654건 | 미배정: 546건
+📊 통계 저장 완료: blk_assign_stats.json
 ✅ 저장 완료: blk_assign_result.xlsx
+🌐 HTML 리포트 생성 완료: blk_assign_report.html
 ```
 
-### Step 3 — 웹 대시보드 생성
+### Step 3 — 웹 대시보드 확인
+
+Step 2 완료 후 자동 생성된 `blk_assign_report.html`을 브라우저에서 직접 열면 된다.
 
 ```bash
-python blk_assign_web.py
+# Windows
+start blk_assign_report.html
+
+# macOS
+open blk_assign_report.html
 ```
 
-- 출력 파일: `blk_assign_report.html`
-- 브라우저에서 해당 HTML 파일을 직접 열어 확인
-
-> ⚠️ Step 2 실행 후 Step 3을 실행해야 최신 데이터가 반영된다.
+> **별도 실행 불필요** — `blk_assign_web.py`는 `blk_assign_agent.py`에 통합되었다.
 
 ---
 
@@ -277,6 +270,13 @@ blk_master에 다음 2개 컬럼이 추가된 결과 파일
 ## 9. 웹 대시보드 사용법
 
 `blk_assign_report.html`을 브라우저에서 열면 4개 탭으로 구성된 대시보드가 표시된다.
+
+네비게이션 바 우측에 두 가지 타임스탬프가 표시된다.
+
+| 타임스탬프 | 의미 | 갱신 시점 |
+|-----------|------|-----------|
+| ⚙️ Agent 실행 | `blk_assign_agent.py` 실행 시각 | HTML 생성 시 고정 |
+| 🌐 페이지 로드 | 브라우저가 HTML을 로드한 시각 | 탭 열 때마다 갱신 |
 
 | 탭 | 내용 |
 |----|------|
@@ -379,7 +379,7 @@ KR_HOLIDAYS = {
 | 🔴 높음 | T-소 미배정 처리 | area_prior_1≠동일인 T-소 잔여 배정 규칙 추가 필요 |
 | 🔴 높음 | H-대 jig_F/W 규칙 | H-대이고 jig=F 또는 W인 블록 배정 규칙 미정의 |
 | 🟡 보통 | 주별 평활화 강화 | 인접 주 여유도를 작업장 선택 점수에 반영 |
-| 🟡 보통 | 웹 대시보드 서버화 | Flask 기반 실시간 필터링 서버로 전환 |
+| 🟡 보통 | 웹 대시보드 서버화 | Flask 기반 실시간 필터링 서버로 전환 (현재는 정적 HTML) |
 | 🟢 낮음 | 2027년 공휴일 추가 | m_fndt가 2027년에 걸치는 블록 처리 |
 | 🟢 낮음 | 배정 결과 Excel 포맷팅 | 작업장별 색상 구분, 조건부 서식 적용 |
 
