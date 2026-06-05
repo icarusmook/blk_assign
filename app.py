@@ -613,8 +613,13 @@ def save_files(df, stats):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @st.cache_data(show_spinner=False)
-def run_assignment(_blk_mtime: float, _capa_mtime: float):
-    """입력 파일 수정시간이 바뀔 때만 재실행. stdout을 캡처해서 로그로 반환."""
+def run_assignment(blk_mtime: float, capa_mtime: float):
+    """입력 파일 수정시간이 바뀔 때만 재실행. stdout을 캡처해서 로그로 반환.
+
+    blk_mtime, capa_mtime 은 @st.cache_data 의 캐시 키로만 사용되며,
+    함수 본문에서 직접 참조하지 않는 것이 정상입니다.
+    """
+    del blk_mtime, capa_mtime  # cache keys only — consumed by @st.cache_data
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         print("▶ 데이터 로드 ...")

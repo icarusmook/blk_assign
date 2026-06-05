@@ -3,6 +3,9 @@ blk_master_gen.py — 블록 마스터 Excel 데이터 생성기
 3,200행 × 24컬럼 (알파벳 데이터 대문자)
 """
 
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+
 import pandas as pd
 import numpy as np
 import random
@@ -271,36 +274,64 @@ for i in range(N):
             load_mh[i] = sub_w_len[i] / 3.93
 
 # ─────────────────────────────────────────────────────────────
-# 19. area_prior_1 — T/소 10% → '동일', 나머지 → AREA 랜덤
+# 19~23. area_prior_1~5
+#   T 행: type이 동일하면 area_prior 1~5 값이 동일
+#          → type별 사전 생성, 16가지 type 중 10%는 area_prior_1 = '동일'
+#   H 행: AREA 랜덤, 이전 컬럼 누적 제외
 # ─────────────────────────────────────────────────────────────
-ts_so_idx = list(np.where((h_t == 'T') & (stg == '소'))[0])
-dongil_set = set(random.sample(ts_so_idx, max(1, len(ts_so_idx) // 10)))
-area_prior_1 = np.array([
-    '동일' if i in dongil_set else random.choice(AREAS)
-    for i in range(N)
-], dtype='U10')
 
-# ─────────────────────────────────────────────────────────────
-# 20~23. area_prior_2~5 — 이전 컬럼 제외한 AREA 랜덤
-# ─────────────────────────────────────────────────────────────
-def gen_next_prior(*prev_cols):
+# type별 area_prior 1~5 사전 생성 (T 행 전용)
+dongil_types = set(random.sample(TYPE_COMBOS, max(1, len(TYPE_COMBOS) // 10)))
+
+type_ap_map: dict = {}
+for _t in TYPE_COMBOS:
+    _ap1 = '동일' if _t in dongil_types else random.choice(AREAS)
+    _excl = set() if _ap1 == '동일' else {_ap1}
+    _ap2 = random.choice([a for a in AREAS if a not in _excl]); _excl.add(_ap2)
+    _ap3 = random.choice([a for a in AREAS if a not in _excl]); _excl.add(_ap3)
+    _ap4 = random.choice([a for a in AREAS if a not in _excl]); _excl.add(_ap4)
+    _ap5 = random.choice([a for a in AREAS if a not in _excl])
+    type_ap_map[_t] = (_ap1, _ap2, _ap3, _ap4, _ap5)
+
+# H 행용: 이전 컬럼 누적 제외 랜덤
+def gen_next_prior_h(*prev_cols):
     result = np.empty(N, dtype='U10')
     for i in range(N):
+        if h_t[i] == 'T':
+            result[i] = ''  # T 행은 type_ap_map으로 별도 채움
+            continue
         excluded = set()
         for c in prev_cols:
             v = c[i]
             if v == '동일':
-                excluded.add(m_area[i])  # '동일'은 해당 행의 m_area로 해석
+                excluded.add(m_area[i])
             elif v:
                 excluded.add(v)
-        pool = [a for a in AREAS if a not in excluded]
-        result[i] = random.choice(pool)
+        result[i] = random.choice([a for a in AREAS if a not in excluded])
     return result
 
-area_prior_2 = gen_next_prior(area_prior_1)
-area_prior_3 = gen_next_prior(area_prior_1, area_prior_2)
-area_prior_4 = gen_next_prior(area_prior_1, area_prior_2, area_prior_3)
-area_prior_5 = gen_next_prior(area_prior_1, area_prior_2, area_prior_3, area_prior_4)
+# area_prior_1
+area_prior_1 = np.empty(N, dtype='U10')
+for i in range(N):
+    if h_t[i] == 'T':
+        area_prior_1[i] = type_ap_map[type_col[i]][0]
+    else:
+        area_prior_1[i] = random.choice(AREAS)
+
+# area_prior_2~5 (H 행 먼저, T 행은 후속 루프에서 채움)
+area_prior_2 = gen_next_prior_h(area_prior_1)
+area_prior_3 = gen_next_prior_h(area_prior_1, area_prior_2)
+area_prior_4 = gen_next_prior_h(area_prior_1, area_prior_2, area_prior_3)
+area_prior_5 = gen_next_prior_h(area_prior_1, area_prior_2, area_prior_3, area_prior_4)
+
+# T 행: type_ap_map에서 2~5 채우기
+for i in range(N):
+    if h_t[i] == 'T':
+        _aps = type_ap_map[type_col[i]]
+        area_prior_2[i] = _aps[1]
+        area_prior_3[i] = _aps[2]
+        area_prior_4[i] = _aps[3]
+        area_prior_5[i] = _aps[4]
 
 # ─────────────────────────────────────────────────────────────
 # 24. assign_prior — type 그룹별 1~16
@@ -367,7 +398,13 @@ print(f"[sub_w_len 채워진 행] {df['sub_w_len'].notna().sum():,}")
 print(f"[m_mh 채워진 행] {df['m_mh'].notna().sum():,}")
 print(f"[prt_area 채워진 행] {(df['prt_area']!='').sum():,}")
 print(f"[load_mh 채워진 행] {df['load_mh'].notna().sum():,}")
-print(f"[area_prior_1 동일 개수] {(df['area_prior_1']=='동일').sum()}")
+print(f"[area_prior_1 동일 개수] {(df['area_prior_1']=='동일').sum()} (동일 type 수: {len(dongil_types)})")
+t_rows = df[df['h_t']=='T']
+type_consistent = all(
+    t_rows.groupby('type')[col].nunique().max() == 1
+    for col in ['area_prior_1','area_prior_2','area_prior_3','area_prior_4','area_prior_5']
+)
+print(f"[type별 area_prior 일관성] {'✓' if type_consistent else '✗'}")
 print(f"[assign_prior 범위] {df['assign_prior'].dropna().min()}~{df['assign_prior'].dropna().max()}")
 print()
 print("[m_stdt 월별 분포]")
@@ -376,6 +413,6 @@ print(df['m_stdt'].dt.month.value_counts().sort_index().to_string())
 # ─────────────────────────────────────────────────────────────
 # Excel 저장
 # ─────────────────────────────────────────────────────────────
-output_path = '/mnt/d/mook/AI/pjt/company/blk_assign/blk_master.xlsx'
+output_path = r'D:\AI\blk_assign\blk_master.xlsx'
 df.to_excel(output_path, index=False)
 print(f"\n✅ 저장 완료: {output_path}")

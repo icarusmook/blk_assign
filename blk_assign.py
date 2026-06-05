@@ -18,7 +18,7 @@ import openpyxl
 from typing import Optional
 
 # ── 경로 상수 ─────────────────────────────────────────────────────────────────
-BASE_DIR        = '/mnt/d/mook/AI/pjt/company/blk_assign'
+BASE_DIR        = r'D:\AI\blk_assign'
 BLK_MASTER_PATH = f'{BASE_DIR}/blk_master.xlsx'
 AREA_CAPA_PATH  = f'{BASE_DIR}/area_capa.xlsx'
 
