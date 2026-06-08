@@ -55,6 +55,8 @@ AREAS_MID_DL  = ['AREA1', 'AREA2', 'AREA6']
 AREAS_REMAIN  = ['AREA7', 'AREA8', 'AREA9', 'AREA10', 'AREA12', 'AREA13', 'AREA14']
 PS_AREA_PAIRS = [('AREA7', 'AREA8'), ('AREA9', 'AREA10'), ('AREA13', 'AREA14')]
 AREA_PRIOR_COLS = ['area_prior_1', 'area_prior_2', 'area_prior_3', 'area_prior_4', 'area_prior_5']
+AREAS_R14 = ['AREA5', 'AREA1', 'AREA2', 'AREA6', 'AREA3', 'AREA4',
+             'AREA9', 'AREA10', 'AREA7', 'AREA8', 'AREA12', 'AREA11', 'AREA13', 'AREA14']
 
 RULE_LABELS = {
     'R2':  'H/Y9 → AREA15',
@@ -68,6 +70,7 @@ RULE_LABELS = {
     'R11': 'H-대/중 잔여 → AREA7~14',
     'R12': 'H-dir → prt_area(override)',
     'R13': 'T-소 분산배정 (area_seq 순)',
+    'R14': '잔여 미배정 → AREA5→1→2→6→3→4→9→10→7→8→12→11→13→14',
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -163,13 +166,22 @@ def remove_load(area, dist, cl, cwl):
     for k, v in dist['weekly'].items():
         cwl[area][k] -= v
 
+def _check_3m_window(area_cl: dict, new_load: dict, area_tgt: dict) -> bool:
+    """3개월 슬라이딩 윈도우 합산으로 목표 초과 여부 확인. True=배정 가능.
+    단일 월이 목표를 넘어도 3개월 합산이 허용 범위면 배정 허용."""
+    all_keys = sorted(set(new_load) | set(area_tgt))
+    for i in range(len(all_keys)):
+        window = all_keys[i:i + 3]
+        total_load = sum(area_cl.get(k, 0.0) + new_load.get(k, 0.0) for k in window)
+        total_tgt  = sum(area_tgt.get(k, 0)                          for k in window)
+        if total_load > total_tgt:
+            return False
+    return True
+
 def can_assign(area, dist, cl, tgt) -> bool:
     if area not in tgt:
         return True
-    for (yr, mo), blk_load in dist['monthly'].items():
-        if cl.get(area, {}).get((yr, mo), 0.0) + blk_load > tgt[area].get((yr, mo), 0):
-            return False
-    return True
+    return _check_3m_window(cl.get(area, {}), dist['monthly'], tgt[area])
 
 def can_assign_group(area, indices, load_dists, cl, tgt) -> bool:
     if area not in tgt:
@@ -178,10 +190,7 @@ def can_assign_group(area, indices, load_dists, cl, tgt) -> bool:
     for idx in indices:
         for k, v in load_dists[idx]['monthly'].items():
             grp_load[k] += v
-    for (yr, mo), g_load in grp_load.items():
-        if cl.get(area, {}).get((yr, mo), 0.0) + g_load > tgt[area].get((yr, mo), 0):
-            return False
-    return True
+    return _check_3m_window(cl.get(area, {}), dict(grp_load), tgt[area])
 
 def assign_block(df, idx, area, rule, load_dists, cl, cwl):
     df.at[idx, 'assigned_area'] = area
@@ -561,6 +570,51 @@ def r13_assign_t_small_dist(df, load_dists, cl, cwl, tgt, area_seq):
         print(f"    [R13] {area}: {area_cnt}건")
     print(f"  [R13] T-소 분산배정 합계: {total_cnt}건")
 
+
+def r14_assign_remaining(df, load_dists, cl, cwl, tgt):
+    """R13 이후 미배정 전체 잔여 블록을 AREAS_R14 순서로 배정.
+    각 작업장의 월 목표물량에 도달하면(연속 50건 거부) 다음 작업장으로 이동."""
+    mask = df['assigned_area'].isna()
+    sub  = df[mask].copy()
+    if sub.empty:
+        print("  [R14] 미배정 블록 없음")
+        return
+
+    sub['_grp'] = (sub['pjt'].astype(str) + '|' +
+                   sub['blk'].astype(str) + '|' +
+                   sub['type'].astype(str))
+
+    grp_info = (sub.groupby('_grp')
+                .agg(ap=('assign_prior', 'min'), ms=('m_stdt', 'min'))
+                .sort_values(['ap', 'ms']))
+    grp_order = grp_info.index.tolist()
+
+    total_cnt = 0
+    for area in AREAS_R14:
+        if area not in tgt:
+            continue
+        area_cnt  = 0
+        area_skip = 0
+
+        for grp_key in grp_order:
+            grp_idx = sub[sub['_grp'] == grp_key].sort_values('m_stdt').index.tolist()
+            for idx in grp_idx:
+                if df.at[idx, 'assigned_area'] is not None:
+                    continue
+                if can_assign(area, load_dists[idx], cl, tgt):
+                    assign_block(df, idx, area, 'R14', load_dists, cl, cwl)
+                    area_cnt  += 1
+                    total_cnt += 1
+                    area_skip  = 0
+                else:
+                    area_skip += 1
+            if area_skip >= 50:
+                break
+
+        print(f"    [R14] {area}: {area_cnt}건")
+    print(f"  [R14] 잔여 배정 합계: {total_cnt}건")
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 통계 생성 & 파일 저장
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -568,7 +622,7 @@ def r13_assign_t_small_dist(df, load_dists, cl, cwl, tgt, area_seq):
 def build_stats(df, cl, capa, tgt) -> dict:
     year = 2026
     steps = []
-    for rule in ['R2','R3','R4','R6','R7','R8','R9','R10','R11','R12','R13']:
+    for rule in ['R2','R3','R4','R6','R7','R8','R9','R10','R11','R12','R13','R14']:
         sub = df[df['rule_assigned'] == rule]
         area_dist = sub['assigned_area'].value_counts().to_dict()
         steps.append({
@@ -650,6 +704,7 @@ def run_assignment(blk_mtime: float, capa_mtime: float):
         r11_assign_h_remaining(df, load_dists, cl, cwl, tgt)
         r12_assign_h_dir(df, load_dists, cl, cwl)
         r13_assign_t_small_dist(df, load_dists, cl, cwl, tgt, area_seq)
+        r14_assign_remaining(df, load_dists, cl, cwl, tgt)
 
         stats = build_stats(df, cl, capa, tgt)
         save_files(df, stats)
@@ -751,10 +806,16 @@ RULE_META = {
         "desc": "area_seq 순으로 분산 / 그룹: pjt+blk+type / 정렬: assign_prior→m_stdt / area_prior_1~5 단계적 확장",
         "detail": "T선 소형 미배정 잔여 블록을 area_seq 순서에 따라 분산 배정합니다. area_prior_1부터 5까지 단계적으로 확장하며 목표물량 도달 시 다음 area로 넘어갑니다.",
     },
+    "R14": {
+        "label": "잔여 미배정 순차 배정",
+        "badge": "secondary",
+        "desc": "R13 후 미배정 전체 잔여 → AREA5→1→2→6→3→4→9→10→7→8→12→11→13→14 순서로 월 목표물량까지 배정",
+        "detail": "R13까지 처리 후 남은 모든 미배정 블록을 고정 작업장 순서(AREA5→1→2→6→3→4→9→10→7→8→12→11→13→14)로 배정합니다. 각 작업장의 월 목표물량에 도달하면(연속 50건 거부) 다음 작업장으로 이동합니다.",
+    },
 }
 
-BADGE_COLOR = {"primary": "#0d6efd", "success": "#198754", "warning": "#856404", "danger": "#dc3545"}
-BADGE_BG    = {"primary": "#cfe2ff", "success": "#d1e7dd", "warning": "#fff3cd", "danger": "#f8d7da"}
+BADGE_COLOR = {"primary": "#0d6efd", "success": "#198754", "warning": "#856404", "danger": "#dc3545", "secondary": "#6c757d"}
+BADGE_BG    = {"primary": "#cfe2ff", "success": "#d1e7dd", "warning": "#fff3cd", "danger": "#f8d7da", "secondary": "#e2e3e5"}
 
 def area_key(x):
     return int(x.replace("AREA", "")) if isinstance(x, str) and x.startswith("AREA") else 99
@@ -871,16 +932,18 @@ flowchart TD
     R10 --> R11[R11 H행 + stg=대·중 잔여물량<br/>PS페어 그룹: AREA7+8 · AREA9+10 · AREA13+14<br/>단독 그룹: AREA7→14 순차 first-fit<br/>그룹 초과 시 해제 후 개별 배정]
     R11 --> R12[R12 H행 + blk 4번째 자리 9 또는 H<br/>→ prt_area로 override 배정]
     R12 --> R13[R13 T행 + stg=소 미배정 잔여<br/>area_seq 순으로 분산 배정<br/>그룹: pjt+blk+type / 정렬: assign_prior→m_stdt<br/>area_prior_1→5 단계적 확장 / 목표 도달 시 다음 area]
-    R13 --> SAVE[💾 결과 저장 완료]
+    R13 --> R14[R14 전체 잔여 미배정 블록<br/>AREA5→1→2→6→3→4→9→10→7→8→12→11→13→14 순서<br/>그룹: pjt+blk+type / 정렬: assign_prior→m_stdt<br/>월 목표물량 도달 시 다음 작업장으로 이동]
+    R14 --> SAVE[💾 결과 저장 완료]
     style R0 fill:#fff3cd,stroke:#ffc107
     style R5 fill:#fff3cd,stroke:#ffc107
     style CALC fill:#d1ecf1,stroke:#0c7cd5
     style R1 fill:#d4edda,stroke:#28a745
+    style R14 fill:#e2e3e5,stroke:#6c757d
     style SAVE fill:#d4edda,stroke:#28a745
 </div>
 </body>
 </html>"""
-    components.html(mermaid_html, height=900, scrolling=True)
+    components.html(mermaid_html, height=1000, scrolling=True)
 
     st.divider()
     st.subheader("규칙별 한줄 요약")

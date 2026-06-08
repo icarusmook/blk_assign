@@ -43,19 +43,21 @@ blk_assign/
 │
 ├── 🔧 [배정 엔진 + 리포트]
 │   ├── blk_assign_agent.py       # 핵심: 배정 로직 (R0~R13) + HTML 리포트 자동 생성
-│   └── blk_assign.py             # 구버전 배정 스크립트 (참고용)
+│   ├── blk_assign.py             # 구버전 배정 스크립트 (참고용)
+│   └── app.py                    # Streamlit 대시보드 (배정 실행 + 인터랙티브 시각화)
 │
 ├── 🗄️ [데이터 생성]
-│   └── blk_master_gen.py         # 테스트용 blk_master 데이터 생성기
+│   ├── blk_master_gen.py         # 테스트용 blk_master 데이터 생성기
+│   └── blk_master_gen_spec.md    # blk_master_gen.py 컬럼별 생성 규칙 명세
 │
 ├── 📊 [입력 데이터]
 │   ├── blk_master.xlsx           # 블록 마스터 (배정 대상)
 │   └── area_capa.xlsx            # 작업장별 월별 능력(MH)
 │
-├── 📁 [출력 파일]  ─── blk_assign_agent.py 실행 시 자동 생성
+├── 📁 [출력 파일]  ─── blk_assign_agent.py / app.py 실행 시 자동 생성
 │   ├── blk_assign_result.xlsx    # 배정 결과 (assigned_area 포함)
 │   ├── blk_assign_stats.json     # 배정 통계
-│   └── blk_assign_report.html    # 웹 대시보드 (브라우저에서 직접 열기)
+│   └── blk_assign_report.html    # 정적 웹 대시보드 (브라우저에서 직접 열기)
 │
 └── 📋 [명세 문서]
     ├── blk_assign_spec_v1.0.md   # 배정 규칙 상세 명세 (Markdown)
@@ -103,6 +105,11 @@ blk_assign/
 |------|------|-----------|
 | `blk_master_gen.py` | 테스트용 blk_master 데이터 생성 | ① (최초 1회) |
 | `blk_assign_agent.py` | 배정 엔진 (R0~R13) + HTML 리포트 자동 생성 | ② |
+| `app.py` | Streamlit 대시보드 — 배정 실행 + 인터랙티브 시각화 | ② (대안) |
+
+> `blk_assign_agent.py`와 `app.py`는 같은 배정 로직을 공유한다.  
+> CLI 실행 후 정적 HTML이 필요하면 `blk_assign_agent.py`,  
+> 브라우저에서 실시간 필터/차트가 필요하면 `app.py`를 사용한다.
 
 ---
 
@@ -165,18 +172,23 @@ blk_assign/
 ### 필수 패키지
 
 ```bash
+# blk_assign_agent.py 실행 시
 pip install pandas openpyxl numpy
+
+# app.py (Streamlit 대시보드) 실행 시 추가 설치
+pip install streamlit plotly
 ```
 
 ### Python 버전
 - Python 3.9 이상 권장
 
 ### 파일 경로 설정
-`blk_assign_agent.py` 상단의 `BASE_DIR` 을 실제 파일 위치로 수정한다.
+`blk_assign_agent.py` 및 `blk_assign.py` 상단의 `BASE_DIR`을 실제 파일 위치로 수정한다.  
+`app.py`는 스크립트 위치를 자동 감지하므로 별도 수정이 필요 없다.
 
 ```python
-# blk_assign_agent.py 상단
-BASE_DIR        = 'D:/mook/AI/pjt/company/blk_assign'   # ← 실제 경로로 변경
+# blk_assign_agent.py / blk_assign.py 상단 (Windows)
+BASE_DIR        = r'D:\AI\blk_assign'   # ← 실제 경로로 변경
 BLK_MASTER_PATH = f'{BASE_DIR}/blk_master.xlsx'
 AREA_CAPA_PATH  = f'{BASE_DIR}/area_capa.xlsx'
 RESULT_PATH     = f'{BASE_DIR}/blk_assign_result.xlsx'
@@ -184,7 +196,7 @@ STATS_PATH      = f'{BASE_DIR}/blk_assign_stats.json'
 REPORT_PATH     = f'{BASE_DIR}/blk_assign_report.html'
 ```
 
-> WSL2 환경에서 Windows 경로 접근 시: `BASE_DIR = '/mnt/d/mook/AI/pjt/company/blk_assign'`
+> WSL2 환경에서 Windows 경로 접근 시: `BASE_DIR = '/mnt/d/AI/blk_assign'`
 
 ---
 

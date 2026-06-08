@@ -180,29 +180,36 @@ def remove_load(area: str, dist: dict, cl: dict, cwl: dict):
         cwl[area][k] -= v
 
 
-def can_assign(area: str, dist: dict, cl: dict, tgt: dict) -> bool:
-    """블록 1개 배정 시 월별 목표 초과 여부 확인. tgt에 없으면 무조건 True."""
-    if area not in tgt:
-        return True
-    for (yr, mo), blk_load in dist['monthly'].items():
-        if cl.get(area, {}).get((yr, mo), 0.0) + blk_load > tgt[area].get((yr, mo), 0):
+def _check_3m_window(area_cl: dict, new_load: dict, area_tgt: dict) -> bool:
+    """3개월 슬라이딩 윈도우 합산으로 목표 초과 여부 확인. True=배정 가능.
+    단일 월이 목표를 넘어도 3개월 합산이 허용 범위면 배정 허용."""
+    all_keys = sorted(set(new_load) | set(area_tgt))
+    for i in range(len(all_keys)):
+        window = all_keys[i:i + 3]
+        total_load = sum(area_cl.get(k, 0.0) + new_load.get(k, 0.0) for k in window)
+        total_tgt  = sum(area_tgt.get(k, 0)                          for k in window)
+        if total_load > total_tgt:
             return False
     return True
 
 
+def can_assign(area: str, dist: dict, cl: dict, tgt: dict) -> bool:
+    """블록 1개 배정 시 3개월 슬라이딩 윈도우 합산 목표 초과 여부 확인. tgt에 없으면 무조건 True."""
+    if area not in tgt:
+        return True
+    return _check_3m_window(cl.get(area, {}), dist['monthly'], tgt[area])
+
+
 def can_assign_group(area: str, indices: list, load_dists: list,
                      cl: dict, tgt: dict) -> bool:
-    """그룹 전체 배정 시 월별 목표 초과 여부 확인."""
+    """그룹 전체 배정 시 3개월 슬라이딩 윈도우 합산 목표 초과 여부 확인."""
     if area not in tgt:
         return True
     grp_load: dict = defaultdict(float)
     for idx in indices:
         for k, v in load_dists[idx]['monthly'].items():
             grp_load[k] += v
-    for (yr, mo), g_load in grp_load.items():
-        if cl.get(area, {}).get((yr, mo), 0.0) + g_load > tgt[area].get((yr, mo), 0):
-            return False
-    return True
+    return _check_3m_window(cl.get(area, {}), dict(grp_load), tgt[area])
 
 
 def assign_block(df: pd.DataFrame, idx: int, area: str,
